@@ -102,3 +102,26 @@ with tab4:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Obras', index=False)
         st.download_button("Excel Completo", output.getvalue(), "PMRO_obras.xlsx")
+
+    tab5 = st.tabs(["📊 Dashboard", "➕ Cadastrar", "📈 Gráficos", "📥 Export", "📁 Upload"])[-1]
+
+with tab5:
+    st.header("📁 Import Excel")
+    uploaded_file = st.file_uploader("Escolha planilha obras", type=['xlsx', 'xls'])
+    
+    if uploaded_file:
+        df_upload = pd.read_excel(uploaded_file)
+        st.write("Prévia:")
+        st.dataframe(df_upload.head())
+        
+        if st.button("✅ Importar Obras"):
+            conn = sqlite3.connect(DB_PATH)
+            try:
+                # Ajuste colunas sua planilha
+                df_upload['data'] = datetime.now().strftime("%Y-%m-%d")
+                df_upload.to_sql('contratos', conn, if_exists='append', index=False)
+                conn.close()
+                st.success(f"✅ {len(df_upload)} obras importadas!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro colunas: {e}")
