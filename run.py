@@ -121,29 +121,46 @@ with tab4:
         st.info("Sem dados")
 
 with tab5:
-    st.header("📁 Upload Planilhas")
-    st.info("📋 Colunas: numero | valor | status | observacoes")
+    st.header("📁 Upload Planilhas SINAPI")
+    st.info("📋 Colunas obrigatórias: numero, valor, status")
     
-    uploaded = st.file_uploader("Escolha Excel", type=['xlsx'])
+    uploaded = st.file_uploader("📄 Excel .xlsx", type='xlsx')
     
     if uploaded:
-        df_upload = pd.read_excel(uploaded)
-        st.write("**Prévia importação:**")
-        st.dataframe(df_upload.head())
-        
-        col1, col2 = st.columns(2)
-        if col1.button("✅ IMPORTAR", use_container_width=True):
-            conn = sqlite3.connect(DB_PATH)
-            try:
-                df_upload['data'] = datetime.now().strftime("%Y-%m-%d")
-                df_upload.to_sql('contratos', conn, if_exists='append', index=False)
-                conn.close()
-                st.success(f"✅ {len(df_upload)} obras importadas!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro colunas: {e}")
-        if col2.button("❌ Cancelar", use_container_width=True):
-            st.rerun()
+        try:
+            df_upload = pd.read_excel(uploaded)
+            st.success(f"✅ {len(df_upload)} linhas lidas")
+            st.dataframe(df_upload.head())
+            
+            # Validação
+            if 'numero' in df_upload.columns and 'valor' in df_upload.columns:
+                col1, col2 = st.columns(2)
+                if col1.button("✅ IMPORTAR OBRAS", use_container_width=True):
+                    conn = sqlite3.connect(DB_PATH)
+                    # Padroniza colunas
+                    for idx, row in df_upload.iterrows():
+                        try:
+                            conn.execute("""
+                                INSERT OR IGNORE INTO contratos (numero, valor, status, data, observacoes)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (str(row['numero']), float(row['valor']), 
+                                  row.get('status', 'Em execução'), 
+                                  datetime.now().strftime("%Y-%m-%d"),
+                                  row.get('observacoes', '')))
+                        except:
+                            pass
+                    conn.commit()
+                    conn.close()
+                    st.success("✅ Importação concluída!")
+                    st.rerun()
+            else:
+                st.error("❌ Colunas faltando: numero, valor")
+                
+        except Exception as e:
+            st.error(f"❌ Arquivo inválido: {e}")
+    else:
+        st.info("👆 Arraste Excel obras")
 
 st.markdown("---")
 st.caption("👨‍💼 Eng. Guilherme Baldin | Prefeitura Porto Velho")
+
