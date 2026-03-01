@@ -7,22 +7,20 @@ import io
 
 st.set_page_config(layout="wide", page_icon="🏗️")
 
-# SESSION LOGIN
+# LOGIN SESSION
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = ""
 
 if not st.session_state.logged_in:
-    st.markdown("""
-    # 🔐 LicitaContract PMRO
-    ## Acesso Restrito Equipe
-    """)
+    st.markdown("# 🔐 LicitaContract PMRO")
+    st.markdown("### Acesso Restrito Equipe Engenharia")
     
     col1, col2 = st.columns(2)
-    user = col1.text_input("👤 Usuário PMRO")
+    user = col1.text_input("👤 Usuário")
     senha = col2.text_input("🔑 Senha", type="password")
     
-    if st.button("🚀 Entrar", use_container_width=True):
+    if st.button("🚀 Acessar Sistema", use_container_width=True):
         if (user == "guilherme" and senha == "engenharia123") or \
            (user == "engenheiro" and senha == "pmro2026"):
             st.session_state.logged_in = True
@@ -32,9 +30,8 @@ if not st.session_state.logged_in:
             st.error("❌ Credenciais inválidas")
     st.stop()
 
-# LOGADO - SIDEBAR
-st.sidebar.success(f"👋 {st.session_state.user}")
-if st.sidebar.button("🚪 Logout"):
+st.sidebar.success(f"Logado: {st.session_state.user}")
+if st.sidebar.button("Sair"):
     st.session_state.logged_in = False
     st.session_state.user = ""
     st.rerun()
@@ -51,7 +48,7 @@ def init_db():
         status TEXT,
         data TEXT,
         observacoes TEXT,
-        usuario TEXT
+        usuario TEXT DEFAULT 'equipe'
     )''')
     conn.commit()
     conn.close()
@@ -63,26 +60,26 @@ def get_data():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql("SELECT * FROM contratos ORDER BY data DESC", conn)
     conn.close()
-    return df
+    return df.fillna('')
 
-st.title(f"🏗️ LicitaContract PMRO")
-st.caption(f"👨‍💼 Logado: {st.session_state.user}")
+st.title("🏗️ LicitaContract PMRO")
+st.caption(f"Usuário: {st.session_state.user}")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "➕ Cadastrar", "📈 Gráficos", "📥 Export"])
 
 with tab1:
-    st.header("📊 Dashboard")
+    st.header("📊 Dashboard PMRO")
     df = get_data()
     if len(df) > 0:
         col1, col2 = st.columns(2)
-        col1.metric("Total Obras", len(df))
+        col1.metric("Obras", len(df))
         col2.metric("Valor Total", f"R$ {df.valor.sum():,.0f}")
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("👆 Cadastre primeira obra!")
+        st.info("Cadastre obras!")
 
 with tab2:
-    st.header("➕ Nova Obra")
+    st.header("➕ Cadastrar Obra")
     with st.form("form"):
         col1, col2 = st.columns(2)
         numero = col1.text_input("Número Contrato")
@@ -90,7 +87,7 @@ with tab2:
         status = st.selectbox("Status", ["Em execução", "Concluído", "Paralisado"])
         obs = st.text_area("Observações")
         
-        if st.form_submit_button("✅ Salvar", use_container_width=True):
+        if st.form_submit_button("Salvar"):
             conn = sqlite3.connect(DB_PATH)
             try:
                 conn.execute("""
@@ -98,40 +95,31 @@ with tab2:
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (numero, valor, status, datetime.now().strftime("%Y-%m-%d"), obs, st.session_state.user))
                 conn.commit()
-                st.success("✅ Obra cadastrada!")
+                st.success("✅ Cadastrada!")
                 st.rerun()
-            except sqlite3.IntegrityError:
-                st.error("❌ Número contrato já existe!")
-            except Exception as e:
-                st.error(f"Erro: {e}")
+            except:
+                st.error("❌ Número existe!")
             conn.close()
 
 with tab3:
-    st.header("📈 Gráficos")
+    st.header("📈 Analytics")
     df = get_data()
     if len(df) > 0:
         col1, col2 = st.columns(2)
-        fig1 = px.pie(df, names='status', title="Status Obras")
-        col1.plotly_chart(fig1, use_container_width=True)
-        fig2 = px.bar(df, x='numero', y='valor', title="Valores")
-        col2.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("Sem dados")
+        fig1 = px.pie(df, names='status')
+        col1.plotly_chart(fig1)
+        fig2 = px.bar(df, x='numero', y='valor')
+        col2.plotly_chart(fig2)
 
 with tab4:
-    st.header("📥 Relatórios")
+    st.header("📥 Export")
     df = get_data()
     if len(df) > 0:
         st.dataframe(df)
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Obras', index=False)
-            resumo = df.groupby(['status', 'usuario'])['valor'].sum().reset_index()
-            resumo.to_excel(writer, sheet_name='Resumo', index=False)
-        st.download_button("📥 Excel Oficial PMRO", output.getvalue(),
-                          f"PMRO_{datetime.now().strftime('%Y%m%d')}.xlsx", use_container_width=True)
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 CSV PMRO", csv, f"pmro_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
     else:
-        st.info("Sem dados para exportar")
+        st.info("Sem dados")
 
 st.markdown("---")
-st.caption("🔒 Acesso restrito PMRO | Equipe Engenharia")
+st.caption("Prefeitura Porto Velho | Licitações Seguras")
