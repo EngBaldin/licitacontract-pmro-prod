@@ -121,46 +121,45 @@ with tab4:
         st.info("Sem dados")
 
 with tab5:
-    st.header("📁 Upload Planilhas SINAPI")
-    st.info("📋 Colunas obrigatórias: numero, valor, status")
+    st.header("📁 Upload Flexível")
+    st.info("🔄 Mapeia qualquer Excel → numero/valor/status")
     
-    uploaded = st.file_uploader("📄 Excel .xlsx", type='xlsx')
+    uploaded = st.file_uploader("📄 .xlsx", type='xlsx')
     
     if uploaded:
-        try:
-            df_upload = pd.read_excel(uploaded)
-            st.success(f"✅ {len(df_upload)} linhas lidas")
-            st.dataframe(df_upload.head())
-            
-            # Validação
-            if 'numero' in df_upload.columns and 'valor' in df_upload.columns:
-                col1, col2 = st.columns(2)
-                if col1.button("✅ IMPORTAR OBRAS", use_container_width=True):
-                    conn = sqlite3.connect(DB_PATH)
-                    # Padroniza colunas
-                    for idx, row in df_upload.iterrows():
-                        try:
-                            conn.execute("""
-                                INSERT OR IGNORE INTO contratos (numero, valor, status, data, observacoes)
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (str(row['numero']), float(row['valor']), 
-                                  row.get('status', 'Em execução'), 
-                                  datetime.now().strftime("%Y-%m-%d"),
-                                  row.get('observacoes', '')))
-                        except:
-                            pass
-                    conn.commit()
-                    conn.close()
-                    st.success("✅ Importação concluída!")
-                    st.rerun()
-            else:
-                st.error("❌ Colunas faltando: numero, valor")
-                
-        except Exception as e:
-            st.error(f"❌ Arquivo inválido: {e}")
-    else:
-        st.info("👆 Arraste Excel obras")
+        df_raw = pd.read_excel(uploaded)
+        st.success(f"📊 {len(df_raw)} linhas detectadas")
+        st.dataframe(df_raw.head())
+        
+        # Auto-mapeamento colunas
+        col_numero = st.selectbox("Número/Descrição", df_raw.columns)
+        col_valor = st.selectbox("Valor", [c for c in df_raw.columns if df_raw[c].dtype in ['float64', 'int64']])
+        col_status = st.selectbox("Status (opcional)", ["Em execução"] + list(df_raw.columns))
+        
+        if st.button("✅ IMPORTAR", use_container_width=True):
+            conn = sqlite3.connect(DB_PATH)
+            count = 0
+            for idx, row in df_raw.iterrows():
+                try:
+                    numero = str(row[col_numero])[:50]
+                    valor = float(row[col_valor])
+                    status = row[col_status] if col_status != "Em execução" else "Em execução"
+                    
+                    conn.execute("""
+                        INSERT OR IGNORE INTO contratos (numero, valor, status, data, observacoes)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (numero, valor, status, datetime.now().strftime("%Y-%m-%d"), f"Import {col_numero}"))
+                    count += 1
+                except:
+                    pass
+            conn.commit()
+            conn.close()
+            st.success(f"✅ {count} obras importadas!")
+            st.balloons()
+            st.rerun()
+
 
 st.markdown("---")
 st.caption("👨‍💼 Eng. Guilherme Baldin | Prefeitura Porto Velho")
+
 
