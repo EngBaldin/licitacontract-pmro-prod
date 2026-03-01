@@ -4,45 +4,42 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import io
-import streamlit_authenticator as stauth
-
-# CONFIG SEGURANÇA (substitua por secrets.toml depois)
-credentials = {
-    "usernames": {
-        "guilherme": {
-            "name": "Guilherme Baldin",
-            "password": "engenharia123"
-        },
-        "engenheiro": {
-            "name": "Engenheiro PMRO", 
-            "password": "pmro2026"
-        }
-    }
-}
-cookie = {"key": "licitacontract", "expiry_days": 7}
-
-authenticator = stauth.Authenticate(
-    credentials,
-    cookie["key"],
-    cookie["name"],
-    cookie["expiry_days"]
-)
-
-name, authentication_status, username = authenticator.login("Login PMRO", "left")
-
-if authentication_status == False:
-    st.error("Senha incorreta")
-elif authentication_status == None:
-    st.warning("Por favor digite usuário/senha")
-    st.stop()
-else:
-    # SIDEBAR USER
-    st.sidebar.success(f"👋 {name}")
-    if st.sidebar.button("Logout"):
-        authenticator.logout()
-        st.rerun()
 
 st.set_page_config(layout="wide", page_icon="🏗️")
+
+# LOGIN SIMPLES PMRO
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user = ""
+
+if not st.session_state.logged_in:
+    st.title("🔐 LicitaContract PMRO")
+    col1, col2 = st.columns([1,2])
+    with col1:
+        user = st.text_input("Usuário PMRO")
+        senha = st.text_input("Senha", type="password")
+    with col2:
+        st.info("👨‍💼 **guilherme** / **engenharia123**\n👷 **engenheiro** / **pmro2026**")
+    
+    if st.button("Entrar"):
+        if user == "guilherme" and senha == "engenharia123":
+            st.session_state.logged_in = True
+            st.session_state.user = "Guilherme Baldin"
+            st.rerun()
+        elif user == "engenheiro" and senha == "pmro2026":
+            st.session_state.logged_in = True
+            st.session_state.user = "Engenheiro PMRO"
+            st.rerun()
+        else:
+            st.error("❌ Credenciais inválidas")
+    st.stop()
+
+# USUÁRIO LOGADO
+st.sidebar.success(f"👋 {st.session_state.user}")
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.logged_in = False
+    st.session_state.user = ""
+    st.rerun()
 
 DB_PATH = "licitacontract.db"
 
@@ -56,8 +53,8 @@ def init_db():
         status TEXT,
         data TEXT,
         observacoes TEXT,
-        usuario TEXT DEFAULT ?
-    )''', (name,))
+        usuario TEXT
+    )''')
     conn.commit()
     conn.close()
 
@@ -70,21 +67,20 @@ def get_data():
     conn.close()
     return df
 
-st.title("🏗️ LicitaContract PMRO 🔐")
-st.caption(f"Usuário: {name}")
+st.title(f"🏗️ LicitaContract PMRO - {st.session_state.user}")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "➕ Cadastrar", "📈 Gráficos", "📥 Export"])
 
 with tab1:
-    st.header("📊 Dashboard")
     df = get_data()
     if len(df) > 0:
         col1.metric("Obras", len(df))
         col2.metric("Valor", f"R$ {df.valor.sum():,.0f}")
         st.dataframe(df)
+    else:
+        st.info("Cadastre obras!")
 
 with tab2:
-    st.header("➕ Nova Obra")
     with st.form("form"):
         numero = st.text_input("Número")
         valor = st.number_input("Valor")
@@ -92,14 +88,21 @@ with tab2:
         obs = st.text_area("Obs")
         if st.form_submit_button("Salvar"):
             conn = sqlite3.connect(DB_PATH)
-            conn.execute("INSERT INTO contratos (numero, valor, status, data, observacoes, usuario) VALUES (?, ?, ?, ?, ?, ?)",
-                        (numero, valor, status, datetime.now().strftime("%Y-%m-%d"), obs, name))
+            conn.execute("INSERT INTO contratos VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                        (numero, valor, status, datetime.now().strftime("%Y-%m-%d"), obs, st.session_state.user))
             conn.commit()
             conn.close()
             st.success("✅ Salva!")
             st.rerun()
 
-# ... outras tabs iguais ...
+with tab3:
+    df = get_data()
+    if len(df) > 0:
+        fig = px.bar(df, x='numero', y='valor')
+        st.plotly_chart(fig)
 
-st.sidebar.title("👥 Usuários")
-st.sidebar.info("guilherme / engenharia123\nengenheiro / pmro2026")
+with tab4:
+    df = get_data()
+    st.download_button("Excel", df.to_csv(index=False), "pmro.csv")
+
+st.sidebar.caption("guilherme/engenharia123 | engenheiro/pmro2026")
